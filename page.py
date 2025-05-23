@@ -1,5 +1,7 @@
 import streamlit as st
 from streamlit import session_state as ss
+from dotenv import load_dotenv
+load_dotenv()
 import pandas as pd
 from langchain_openai.chat_models import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -25,7 +27,6 @@ RANKING_PROMPT = ChatPromptTemplate(messages=[
         '''\
 Ниже представлено ОПИСАНИЕ ВАКАНСИИ и ТАБЛИЦА КОМПЕТЕНЦИЙ возможных работников компании.
 Твоя задача для каждого работника компании присвоить РЕЙТИНГ СООТВЕТСТВИЯ данной вакансии.
-
 ОПИСАНИЕ ВАКАНСИИ:
 {requiremets}
 
