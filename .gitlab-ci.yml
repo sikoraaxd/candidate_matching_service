@@ -1,0 +1,50 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  IMAGE_NAME: "cms"
+  DOCKERFILE_PATH: ${CI_PROJECT_DIR}/Dockerfile
+  CONTEXT_PATH: ${CI_PROJECT_DIR}
+  IMAGE_TAG: ${CI_COMMIT_BRANCH}
+  REGISTRY_MIRROR: "nexus.astondevs.ru:5005"
+
+# сборка образа
+build_image:
+  stage: build
+  before_script:
+    - docker stop "$IMAGE_NAME" || true
+    - docker rm "$IMAGE_NAME" || true
+    - docker rmi "$IMAGE_NAME:latest" || true
+  script:
+    - docker build -t "$IMAGE_NAME:latest" .
+  only:
+    - main
+  tags: 
+    - shell
+
+# Тестирование (пример для pytest)
+#test:
+#  stage: test
+#  image: python:3.9
+#  before_script:
+#    - pip install -r requirements.txt
+#  script:
+#    - pytest tests/  # Команда тестов
+#  needs: ["build"]   # Зависит от этапа build
+
+
+## Деплой на сервер shell executor 
+deploy:
+  stage: deploy
+  # before_script: 
+  #   - docker rm "$IMAGE_NAME" || true
+    # - echo "$AND_DOCKER_REGISTRY_RW_PASS" | docker login -u "${AND_REGESTRY_USER_RW}" "${AND_DOCKER_REGISTRY_NAME}" --password-stdin
+  script:
+    # - docker pull $IMAGE_NAME
+    - docker run -d -p 8501:8501 --name "$IMAGE_NAME" "$IMAGE_NAME"
+      
+  only:
+   - main 
+  tags: 
+    - shell
