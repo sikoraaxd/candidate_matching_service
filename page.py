@@ -7,8 +7,6 @@ import requests
 import pandas as pd
 import streamlit as st
 from streamlit import session_state as ss
-from scipy.stats import mode
-
 from ranker import get_rating, CANDIDATE_RANKING_PROMPT, INTERVIEWER_RANKING_PROMPT
 
 import gspread
