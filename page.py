@@ -72,11 +72,6 @@ requirements = st.text_area(
 tab_candidates, tab_interviewers = st.tabs(["Подбор кандидата", "Подбор интервьюера"])
 
 
-# Функция для выбора моды с учетом None
-def mode_with_none(row):
-    counts = row.value_counts(dropna=False)
-    return counts.idxmax()  # самое частое значение, включая None/NaN
-
 
 # Рендеринг вкладки подбора кандидатов
 with tab_candidates:
@@ -87,17 +82,28 @@ with tab_candidates:
     subheader_column.subheader(title)
 
     # Открыть таблицу по названию
-    spreadsheet = client.open("Карта компетенций DP")
+    departments_map = {
+        '1C': 'Карта компетенций 1с',
+        'Data Platform': 'Карта компетенций DP'
+    }
+
+    selected_department = st.selectbox(
+        "📂 Выберите департамент:",
+        list(departments_map.keys()),
+        key=f"department_direction"
+    )
 
     selected_sheet_name = None
     show_candidates = False
     include_staffing = False
     include_laboratory = False
 
-    if requirements:
+    if requirements and selected_department:
         try:
             # Получить и отобразить все листы
-            worksheets = spreadsheet.worksheets()
+            
+            candidates_spreadsheet = client.open(departments_map[selected_department])
+            worksheets = candidates_spreadsheet.worksheets()
             sheet_names = [ws.title for ws in worksheets]                
             selected_sheet_name = st.selectbox(
                 "📂 Выберите компетенцию:",
@@ -125,20 +131,17 @@ with tab_candidates:
     
     # Когда заполнены требования и указано направление - начинается ранжирование
     if requirements and selected_sheet_name:
-        # Получаем ссылку на экспорт XLSX
-        export_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet.id}/export?format=xlsx"
-
-        # Делаем запрос с авторизацией
-        session = requests.Session()
-        session.headers.update({"Authorization": f"Bearer {creds.token}"})
-        response = session.get(export_url)
-
-        # Читаем сразу в pandas
-        competentions_df = pd.read_excel(BytesIO(response.content), sheet_name=selected_sheet_name, header=5)
+        candidates_spreadsheet = client.open(departments_map[selected_department])
+        candidates_worksheet = candidates_spreadsheet.worksheet(selected_sheet_name)
+        candidates_values = candidates_worksheet.get_all_values()
+        competentions_df = pd.DataFrame(candidates_values[6:], columns=candidates_values[5])
         competentions_df.columns = ['Навык'] + list(competentions_df.columns[1:])
         unsupported_columns = [column for column in competentions_df.columns if 'Unnamed' in column]
         competentions_df.drop(columns=unsupported_columns, inplace=True)
-        competentions_df.dropna(how='all', inplace=True)
+
+        empty_competentions_ids = competentions_df[competentions_df['Навык'].str.strip().str.len() == 0].index
+        competentions_df.drop(index=empty_competentions_ids, inplace=True)
+        competentions_df.dropna(subset='Навык', inplace=True)
 
         # Удаляю консультантов (консультанты не выступают в качестве кандидатов)
         pattern = r"(cnslt)"    
@@ -193,7 +196,7 @@ with tab_interviewers:
     subheader_column.subheader(title)
 
     # Открыть таблицу по названию
-    interviewers_spreadsheet = client.open("Карта интревьюеров")
+    interviewers_spreadsheet = client.open("Карта интервьюеров")
 
     interviewers_selected_sheet_name = None
     show_interviewers = False
@@ -216,10 +219,6 @@ with tab_interviewers:
                 key = f"chk_{key_prefix}s"
             )
 
-            with st.container():
-                st.markdown("###### Включить в список интервьюеров:")
-                include_consultant = st.checkbox("Консультанты", key=f"chk_{key_prefix}s_consultant")
-
         except SpreadsheetNotFound:
             st.error("Файл не найден или нет доступа!", icon="🚨")
         except APIError as e:
@@ -228,58 +227,33 @@ with tab_interviewers:
         st.info("Введите требования, чтобы выбрать компетенцию", icon="💡")
     
     # Когда заполнены требования и указано направление - начинается ранжирование
-    if requirements and interviewers_selected_sheet_name:
-        session = requests.Session()
-        session.headers.update({"Authorization": f"Bearer {creds.token}"})
+    if requirements and interviewers_selected_sheet_name and selected_department != '1C':
+        #Подгружаем карту интервьюеров
+        interviewers_worksheet = interviewers_spreadsheet.worksheet(interviewers_selected_sheet_name)
+        interviewers_values = interviewers_worksheet.get_all_values()
+        interviewers_df = pd.DataFrame(interviewers_values[1:], columns=interviewers_values[0])
+        interviewers_df.dropna(subset='Сотрудник', inplace=True)
 
-        # 1. Сначала выбираем из таблиц интервьюеров
-        interviewers_export_url = f"https://docs.google.com/spreadsheets/d/{interviewers_spreadsheet.id}/export?format=xlsx"
-        session = requests.Session()
-        session.headers.update({"Authorization": f"Bearer {creds.token}"})
-        response = session.get(interviewers_export_url)
+        #Подгружаем список кандидатов
+        #Todo: Сделать подгрузку 1 раз за весь сеанс
+        interviewers_candidates_spreadsheet = client.open(departments_map[selected_department])
+        interviewers_candidates_worksheet = interviewers_candidates_spreadsheet.worksheet(interviewers_selected_sheet_name)
+        interviewers_candidates_values = interviewers_candidates_worksheet.get_all_values()
+        interviewers_competentions_df = pd.DataFrame(interviewers_candidates_values[6:], columns=interviewers_candidates_values[5])
 
-        interviewers_df = pd.read_excel(BytesIO(response.content), sheet_name=interviewers_selected_sheet_name)
-        unsupported_columns = [column for column in interviewers_df.columns if 'Unnamed' in column]
-        interviewers_df.drop(columns=unsupported_columns, inplace=True)
-        interviewers_df.dropna(how='all', inplace=True)
+        # Убираем лишних интервьюеров
+        interviewers_list = [interviewers_competentions_df.columns[0]] + interviewers_df['Сотрудник'].tolist() #Сотрудник + список из карты интервьюеров
+        interviewers_to_drop = [col for col in interviewers_competentions_df.columns if col not in interviewers_list]
+        interviewers_competentions_df.drop(columns=interviewers_to_drop, inplace=True)
 
-        # 2. А теперь выбираем сотрудников
-        session = requests.Session()
-        session.headers.update({"Authorization": f"Bearer {creds.token}"})
-        response = session.get(export_url)
-
-        interviewers_competentions_df = pd.read_excel(BytesIO(response.content), sheet_name=interviewers_selected_sheet_name, header=5)
+        # Чистим датафрейм
         interviewers_competentions_df.columns = ['Навык'] + list(interviewers_competentions_df.columns[1:])
         unsupported_columns = [column for column in interviewers_competentions_df.columns if 'Unnamed' in column]
         interviewers_competentions_df.drop(columns=unsupported_columns, inplace=True)
-        interviewers_competentions_df.dropna(how='all', inplace=True)
-
-        # Удаляю стаффинг и лабораторию (стаффинг и лаборатория не выступают в качестве интервьюеров)
-        pattern = r"(staff|laba)"
-        cols_to_drop = [col for col in interviewers_competentions_df.columns if re.search(pattern, col, flags=re.IGNORECASE)]
-        interviewers_competentions_df.drop(columns=cols_to_drop, inplace=True)
-
-        # 3. Теперь из первого датафрейма удаляем тех сотрудников, что есть во втором
-        # Список фамилий из первого df
-        names_to_remove = []
-        for name in list(interviewers_competentions_df.columns[1:]):
-            if name.startswith("cnslt - "):
-                names_to_remove.append(name.replace("cnslt - ", ""))
-            else:
-                names_to_remove.append(name)
-
-        # Фильтруем столбцы второго df
-        interviewers_df = interviewers_df[~interviewers_df['Сотрудник'].isin(names_to_remove)]
-
-        if not include_consultant:
-            pattern = r"(cnslt)"    
-            
-            cols_to_drop = [col for col in interviewers_competentions_df.columns if re.search(pattern, col, flags=re.IGNORECASE)]
-            interviewers_competentions_df.drop(columns=cols_to_drop, inplace=True)
-
-        for interviewer in interviewers_df['Сотрудник']:
-            # Добавляем нового сотрудника справа с мажоритарной компетенцией
-            interviewers_competentions_df[interviewer] = interviewers_competentions_df.apply(mode_with_none, axis=1)
+        empty_competentions_ids = interviewers_competentions_df[interviewers_competentions_df['Навык'].str.strip().str.len() == 0].index
+        print(empty_competentions_ids)
+        interviewers_competentions_df.drop(index=empty_competentions_ids, inplace=True)
+        interviewers_competentions_df.dropna(subset='Навык', inplace=True)
 
         if show_interviewers:
             st.subheader("Список интервьюеров")
