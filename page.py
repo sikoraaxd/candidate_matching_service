@@ -243,7 +243,7 @@ with tab_interviewers:
 
         # Убираем лишних интервьюеров
         interviewers_list = [interviewers_competentions_df.columns[0]] + interviewers_df['Сотрудник'].tolist() #Сотрудник + список из карты интервьюеров
-        interviewers_to_drop = [col for col in interviewers_competentions_df.columns if col not in interviewers_list]
+        interviewers_to_drop = [col for col in interviewers_competentions_df.columns if all(intererviewer not in col for intererviewer in interviewers_list)]
         interviewers_competentions_df.drop(columns=interviewers_to_drop, inplace=True)
 
         # Чистим датафрейм
@@ -251,7 +251,6 @@ with tab_interviewers:
         unsupported_columns = [column for column in interviewers_competentions_df.columns if 'Unnamed' in column]
         interviewers_competentions_df.drop(columns=unsupported_columns, inplace=True)
         empty_competentions_ids = interviewers_competentions_df[interviewers_competentions_df['Навык'].str.strip().str.len() == 0].index
-        print(empty_competentions_ids)
         interviewers_competentions_df.drop(index=empty_competentions_ids, inplace=True)
         interviewers_competentions_df.dropna(subset='Навык', inplace=True)
 
