@@ -254,6 +254,12 @@ with tab_interviewers:
         interviewers_competentions_df.drop(index=empty_competentions_ids, inplace=True)
         interviewers_competentions_df.dropna(subset='Навык', inplace=True)
 
+        # Добавляем к именам сотрудников их уровень
+        interviewers_competentions_df.columns = [
+            col if col == 'Навык' else f"{col} ({interviewers_df[interviewers_df['Сотрудник'] == col.strip()].iloc[0]['Уровень']})"
+            for col in interviewers_competentions_df.columns
+        ]
+
         if show_interviewers:
             st.subheader("Список интервьюеров")
             st.dataframe(interviewers_competentions_df, height=350)
