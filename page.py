@@ -256,7 +256,7 @@ with tab_interviewers:
 
         # Добавляем к именам сотрудников их уровень
         interviewers_competentions_df.columns = [
-            col if col == 'Навык' else f"{col} ({interviewers_df[interviewers_df['Сотрудник'] == col.strip()].iloc[0]['Уровень']})"
+            col if col == 'Навык' else f"{col} ({interviewers_df[[intr.lower() in col.strip().lower() for intr in interviewers_df['Сотрудник']]].iloc[0]['Уровень']})"
             for col in interviewers_competentions_df.columns
         ]
 
